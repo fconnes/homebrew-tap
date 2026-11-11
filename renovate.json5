@@ -1,0 +1,559 @@
+// Keep the pinned versions moving: the hooks .pre-commit-config.yaml pins, and
+// whatever ecosystem the repository turns out to have (a pyproject.toml, a
+// package.json), which Renovate detects on its own. Each manager arrives as one
+// grouped pull request a week, so a week of updates costs one CI run per group
+// rather than one per dependency; the rules below say where a pull request of
+// its own is worth its run. The pre-commit manager is the one Renovate keeps
+// off by default, hence the preset enabling it.
+//
+// The dependency dashboard stays on, which is what config:recommended already
+// asks for. It is the only place that lists what Renovate found: a manager
+// whose pattern stops matching reports nothing, exactly as it would if there
+// were nothing to update, so the dashboard is where the difference between the
+// two is visible.
+//
+// The rules below name managers rather than paths, so a repository with no
+// pyproject.toml, no package.json and no workflow simply has nothing for them
+// to group.
+//
+// This copy is the one a repository whose workflows bury a version in a `run:`
+// step gets: it adds the custom managers, whose file pattern names
+// .github/workflows outright and so belongs where that directory is.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    ":enablePreCommit",
+    // Pin every action to a commit digest, keeping the release beside it as
+    // a comment. A tag is mutable: repointing `v7` at other code changes what
+    // CI runs without changing the version string, so Renovate sees no
+    // update, opens no pull request, and the release-age guard below never
+    // applies. That is the shape the tj-actions compromise took in March
+    // 2025, and it is invisible to every other setting in this file. A digest
+    // cannot be repointed, and the release moving then arrives as an ordinary
+    // update. The workflows arrive with their actions pinned already; this
+    // keeps an action added later pinned too.
+    "helpers:pinGitHubActionDigests",
+  ],
+  // Every update waits for the repository's own weekly window, the one gesir
+  // draws for it within the window its user's config names and records in
+  // .gesir.toml: the branches, the pull requests and the merges Renovate makes
+  // itself all happen there, so a week of updates reaches the owner once
+  // rather than on whichever day the app visits, and the repositories of one
+  // account do not all run on one night. The token keeps this file naming no
+  // time for everybody it scaffolds, which a cron written here would. Weighed
+  // against opening pull requests whenever the app visits, which spread the CI
+  // runs over the week and sent the owner a notification on each day of it.
+  // Revisit if the owner wants updates as they come again.
+  schedule: ["* 1-4 * * 6"],
+  automergeSchedule: ["* 1-4 * * 6"],
+  // The hourly cap lifted, against Renovate's own default of two pull
+  // requests an hour: inside a window of a few hours that default would push
+  // the rest of a week's updates to the next one. Revisit if a window turns
+  // out too short for a week's updates anyway, which the dependency dashboard
+  // shows as updates left awaiting the schedule.
+  prHourlyLimit: 0,
+  // Vulnerability-driven updates are the one thing that must not wait, and
+  // Renovate already exempts them: `renovate --print-config` shows its
+  // `vulnerabilityAlerts` defaults carry `schedule: []`,
+  // `minimumReleaseAge: null` and `prCreation: "immediate"`, so a security fix
+  // bypasses any schedule a repository sets and the release-age guard below. That path
+  // reads GitHub's alerts, which are off by default on a private repository;
+  // this option, which Renovate marks experimental, adds the OSV database
+  // directly, so the exemption works whether or not a forge is answering.
+  osvVulnerabilityAlerts: true,
+  // The merge is the one wait those defaults leave in place: they lift
+  // `schedule` and not `automergeSchedule`, so a fix that merges itself would
+  // sit in its branch, with no pull request to show it, until the window
+  // opens. Lifted here. So is the dashboard approval the runtime rules below
+  // ask for, which the defaults lift already and which stays written so that
+  // no rule added later can hold a fix behind a checkbox.
+  vulnerabilityAlerts: {
+    automergeSchedule: ["at any time"],
+    dependencyDashboardApproval: false,
+  },
+  // The lock file, regenerated from scratch once a week, which is the one
+  // update that reaches a transitive dependency. A package no manifest names
+  // sits in the lock at the version it was resolved with, and a fix published
+  // for it arrives in no pull request from the rules below, every one of them
+  // and the vulnerability path above acting on the dependencies a manifest
+  // names.
+  // Regenerating the lock moves every transitive version its parents' ranges
+  // allow, which is what `npm audit fix` does by hand; a parent pinning a
+  // version exactly stays put until that parent releases, and an `overrides`
+  // entry is the one lever left for it. Inert where there is no lock file, so
+  // the rule stays in this shared copy rather than in one per ecosystem.
+  // In a weekly window that is the repository's own: gesir draws it for each
+  // repository when it is scaffolded, within the window its user's config
+  // names or at random over the week, records it in .gesir.toml, and fills the
+  // schedule below from that record, so this file names no time for everybody
+  // and the fleet's lock files are not all regenerated on one night.
+  lockFileMaintenance: { enabled: true, schedule: ["* 1-4 * * 6"] },
+  // Renovate merges, rather than handing the merge to the forge.
+  // `platformAutomerge` defaults to true and delegates to the forge's own
+  // auto-merge, which on GitHub waits only for the checks a branch protection
+  // rule *requires*: with no such rule it merges before the gate has run.
+  // Renovate's documentation says so outright, "If you don't select any status
+  // check, and you use platform automerge, then GitHub might automerge PRs
+  // with failing tests!", so the safe half of this pair is the half that needs
+  // no forge setting at all.
+  platformAutomerge: false,
+  // And merges without a pull request: it pushes a branch, waits for the gate
+  // on it, and moves the base branch onto it once green, opening a pull
+  // request only when the gate fails or stays pending past
+  // `prNotPendingHours`. An update the gate clears reaches the owner as a
+  // commit on the base branch and as nothing else, so what does open a pull
+  // request is what needs a human. It needs a gate that runs on a pushed
+  // branch, which every workflow and pipeline this catalog ships does, and a
+  // base branch Renovate may push to: a protection rule or a merge queue
+  // refusing the push turns the update back into a pull request, which is
+  // noise rather than a failure. Weighed against a pull request per update,
+  // the record of each one in the forge, which cost the owner two
+  // notifications for a change nobody reads; the commit and the dependency
+  // dashboard keep the record.
+  automergeType: "branch",
+  // Left at its default, and written down because the whole policy rests on it:
+  // Renovate refuses to automerge a branch with no tests unless this is true.
+  // A repository with no CI therefore automerges nothing, and that absence is
+  // what excludes it, which is why this shared file needs no exception naming a
+  // project it could not name anyway.
+  ignoreTests: false,
+  // Nothing merges until it has been in the world a week. This is the one guard
+  // a green gate cannot provide: a compromised release does exactly what it
+  // claims and also something else, so it passes every test, and what catches
+  // it is other people finding it first. It applies to the development tooling
+  // above all, which is the half that runs with credentials in CI rather than
+  // on a user's machine long after.
+  minimumReleaseAge: "7 days",
+  // This only ever reaches a pull request that needs a human. `assignAutomerge`
+  // defaults to false, so Renovate assigns nothing it means to merge itself
+  // "unless it fails status checks": what lands in the assigned list is what is
+  // left to do, and the list empties itself as the gate goes green. Who is
+  // assigned is read from the repository's CODEOWNERS, a file the project owns:
+  // this config is the same bytes in every repository, so a login written here
+  // would be one nobody could fill in without the next update putting the
+  // placeholder back. The owner there is the forge *user* who reviews, a
+  // personal account even where the repository lives under an organization,
+  // which cannot be an assignee.
+  assigneesFromCodeOwners: true,
+  // The manager names are Renovate's own and are not guessable, and the
+  // documentation's list does not say which one claims a file:
+  // `renovate --platform=local --dry-run` over a repository does, reporting
+  // `poetry` for a PEP 621 pyproject.toml holding no poetry table at all, and
+  // `bun` for a bun.lock, which the `npm` manager never claims. Re-establish
+  // these with that command rather than from the list.
+  //
+  // A name matching no manager is inert rather than refused: `matchManagers`
+  // takes any string and the schema enumerates none, so such a rule groups
+  // nothing and reads exactly like a week with no update. `pep621` is kept
+  // beside `poetry` on those terms: a real manager that did not
+  // claim this file and may claim it again, costing nothing while it does not.
+  //
+  // A deprecated name is the one that is not free, which is why the custom
+  // managers below are matched as `custom.regex` alone: Renovate rewrites
+  // `regex` to that spelling as it reads the config, so naming both leaves a
+  // duplicated entry and a "Config migration necessary" warning on every run,
+  // in the dependency dashboard this config keeps on precisely so that a real
+  // problem is visible there. Under `custom.regex` alone the group applies,
+  // and under a name that matches nothing each tool arrives in a branch of its
+  // own instead.
+  packageRules: [
+    { matchManagers: ["pre-commit"], groupName: "hooks" },
+    { matchManagers: ["pep621", "poetry", "pip_requirements"], groupName: "pip" },
+    // An npm major is left out of the group and arrives on its own, one pull
+    // request per package, or per monorepo where config:recommended's
+    // grouping names one. A major is the update most often blocked upstream,
+    // by a peer range some other package has yet to widen, and grouped it
+    // holds every other major back with it: the pull request stays red, and a
+    // major that would install cleanly never lands. The minors and patches
+    // stay grouped, which is where one run a week pays. `!major` narrows this
+    // rule rather than a second rule setting groupName to null after it: that
+    // null would also undo the monorepo grouping and split eslint from
+    // @eslint/js, two packages that only install together.
+    { matchManagers: ["npm", "bun"], matchUpdateTypes: ["!major"], groupName: "npm" },
+    // An `overrides` entry moves its range, never its lock alone. A release
+    // inside the range is otherwise a lock-only update, which Renovate runs as
+    // `npm install --package-lock-only <name>@<version>`: npm reads the name as
+    // a direct dependency clashing with its own override and dies on
+    // EOVERRIDE, and the whole group's lock stays at the old releases under a
+    // green pull request. Bumped, the range is resolved by the plain install
+    // that follows. Weighed against dropping the overrides from Renovate,
+    // which leaves an advisory's floor to be raised by hand. Revisit when npm
+    // accepts an install naming an overridden package at a version its
+    // override admits.
+    { matchManagers: ["npm"], matchDepTypes: ["overrides"], rangeStrategy: "bump" },
+    { matchManagers: ["github-actions"], groupName: "actions" },
+    // The runtimes the checks run on: the images a GitLab pipeline names, the
+    // runner image a GitHub job names in `runs-on`, which the actions manager
+    // reads as `github-runner`, and the versions a GitHub workflow hands its
+    // setup actions (the Node of setup-node, the Python of setup-python,
+    // whatever another one takes), which it reads as `uses-with`. Held out of
+    // the automerge below. Each arrives in a pull request of its own rather than
+    // in a group: a repository may have to stay on one runtime's version (a
+    // Python pinned to what a hosted tool runs, say), and a group would make
+    // it refuse every other runtime's bump too, closing the whole pull
+    // request. The rules name the manager and the depType rather than the
+    // dependencies, so no runtime is left out by a name nobody wrote down:
+    // one left out would ride the `actions` group above, where its held
+    // automerge would stop every action's. Listed after that group, so that
+    // these win.
+    { matchManagers: ["gitlabci"], groupName: null },
+    {
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["uses-with", "github-runner"],
+      groupName: null,
+    },
+    { matchManagers: ["custom.regex"], groupName: "workflow tools" },
+    // The runner images a test matrix lists, which the custom manager below
+    // reads, the actions manager reading `runs-on` alone: out of that group
+    // and held out of its automerge, as the `runs-on` images are. Each shares
+    // its name with the `runs-on` image of the same release, so the two land
+    // in one pull request.
+    {
+      matchManagers: ["custom.regex"],
+      matchDepTypes: ["github-runner"],
+      groupName: null,
+    },
+    // Every automerge below departs from Renovate's default, which merges
+    // nothing and leaves each pull request to a human. A rule here merges
+    // only where the gate runs on the branch, a red run being the refusal,
+    // and a major of what ships stays a human's. Weighed against reading
+    // every update by hand, which turns the assigned list into the noise
+    // nobody reads, a failure among it included. Revisit the day an update
+    // merged on a green gate breaks an install, which would say the gate does
+    // not prove what these rules assume it does.
+    //
+    // What ships, or what builds what ships: every major is a human's to read,
+    // and the gate clears the rest. These depType names are Renovate's own,
+    // like the manager names above.
+    {
+      matchDepTypes: [
+        "project.dependencies",
+        "dependencies",
+        "devDependencies",
+      ],
+      matchUpdateTypes: ["patch", "minor"],
+      automerge: true,
+    },
+    // The Python development dependency group (PEP 735), at any update type,
+    // major included. It reaches no user: a group is never published in the
+    // package's metadata, where an extra would be, so ruff, mypy, pytest and
+    // coverage exist only where the gate runs, and the gate runs them. A major
+    // that breaks anything turns `make check` red, and Renovate then refuses
+    // the merge and assigns the pull request instead. An extra is not here,
+    // being what a user can install. `devDependencies` above is deliberately
+    // not here either, and the difference is in what the manifests hold rather
+    // than in the word: a bundled JavaScript project may declare no runtime
+    // dependency at all, its bundler and compiler sitting in `devDependencies`
+    // while building what ships. The word says development; what it holds is
+    // the build.
+    {
+      matchDepTypes: ["dependency-groups"],
+      automerge: true,
+    },
+    // The hooks, at any update type. They reach no user, and the gate that
+    // decides anything here is the project's own gate in CI rather than the
+    // hook stack:
+    // every repository where automerge can fire runs the real gate there, so a
+    // hook that changed cannot weaken what actually guards the tree. Where CI
+    // runs the hooks too, the bump is verified on its own pull request; where
+    // it does not, it is unverified until the next local commit, and that is
+    // the whole of the cost: a commit that stops with an obvious cause,
+    // seconds from a fix, and nothing a user could ever meet.
+    {
+      matchManagers: ["pre-commit"],
+      automerge: true,
+    },
+    // Except the placeholder revision a hook config holds before gesir pins
+    // it, `0.0.0` with or without its `v`, which gesir recognizes and replaces
+    // through `pre-commit autoupdate` when it lays the file. Read as a release,
+    // it draws a pull request moving it to the newest tag of its major, the
+    // 0.x line from 2017 for pre-commit-hooks, and merging that turns the
+    // placeholder into a pin gesir no longer replaces. Only the catalog's own
+    // tree holds one, its parts being templates: in a scaffolded repository
+    // the revision is pinned before Renovate ever reads it, so the rule
+    // matches nothing there. Weighed against an `ignorePaths` on the catalog's
+    // directory, a path no other repository has, which the base must not name.
+    // Revisit if gesir ever spells its placeholder otherwise.
+    {
+      matchManagers: ["pre-commit"],
+      matchCurrentValue: "/^v?0\\.0\\.0$/",
+      enabled: false,
+    },
+    // pre-commit itself, as CI installs it from its requirements file to run
+    // the hooks, on the same terms: it runs only in CI, and a red gate is its
+    // whole failure mode.
+    {
+      matchManagers: ["pip_requirements"],
+      matchPackageNames: ["pre-commit"],
+      automerge: true,
+    },
+    // The linters and the test runner a skill space and a script collection
+    // install from a requirements file, on the terms of the dependency group
+    // above, which holds the same tools where a pyproject.toml has one: they
+    // run only in CI, and a red gate is their whole failure mode. Named by the
+    // files this catalog ships rather than by the manager, since a project's
+    // own runtime `requirements.txt` is read by the same manager and stays a
+    // human's.
+    {
+      matchManagers: ["pip_requirements"],
+      matchFileNames: [
+        "requirements-dev.txt",
+        ".github/lint-requirements.txt",
+        ".gitlab/lint-requirements.txt",
+      ],
+      automerge: true,
+    },
+    // `@types/node` describes the Node the project runs on, which
+    // `.node-version` names where the project has one, so its major moves with
+    // that Node, by the hand that moves it, and never on its own:
+    // a type for an API the runtime lacks compiles cleanly and fails in
+    // production.
+    {
+      matchPackageNames: ["@types/node"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    // What runs only in CI, at any update type, major included. Their
+    // failure mode is a red gate, which is the test, and never a broken
+    // install, so holding a major back would only delay what the run on the
+    // branch already proves.
+    {
+      matchManagers: ["github-actions"],
+      automerge: true,
+    },
+    // Except the runtime the run executes on, the runner image and what the
+    // setup actions install, which the run tests on rather than tests: moving
+    // it changes what a green gate proves, so a human merges it.
+    {
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["uses-with", "github-runner"],
+      automerge: false,
+    },
+    // Except actionlint, which the actions manager reads off its action's
+    // `version` input as it reads a runtime there: a tool the run executes
+    // rather than one it runs on, cleared by the run its pull request
+    // triggers, the workflow linting the workflows.
+    {
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["uses-with"],
+      matchPackageNames: ["rhysd/actionlint"],
+      automerge: true,
+    },
+    // A runtime waits for a tick in the dependency dashboard rather than
+    // opening a pull request: the image a job runs on, the version a setup
+    // action installs or a version file pins, the image a pipeline names.
+    // Moving one is a decision for the fleet more than for a repository, the
+    // next Node major arriving in every repository at once, and held out of
+    // the automerge it arrived as an assigned pull request in each. In the
+    // dashboard it waits for a tick from the owner, who decides it once for
+    // every repository. A security fix is not held: the vulnerability
+    // config above lifts the approval for it. actionlint is not a runtime, as
+    // the rule above says. Weighed against a pull request per runtime bump,
+    // which buried the decisions under notifications. Revisit if the
+    // dashboard goes unread, which would leave these unseen.
+    {
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["uses-with", "github-runner"],
+      matchPackageNames: ["!rhysd/actionlint"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      matchManagers: ["gitlabci", "nodenv", "nvm", "pyenv"],
+      dependencyDashboardApproval: true,
+    },
+    // The regenerated lock file, on the same terms as a patch or a minor: it
+    // moves transitive versions within the ranges the manifest already
+    // allows, so nothing a human reads at a major is in it, and the gate
+    // clears the rest. Its update type is Renovate's own name for the
+    // operation, as the manager and depType names above are.
+    {
+      matchUpdateTypes: ["lockFileMaintenance"],
+      automerge: true,
+    },
+    // The runner images a workflow names, whose datasource publishes the label
+    // and no dated release: with no release timestamp, the default
+    // `minimumReleaseAgeBehaviour` of "timestamp-required" marks every bump
+    // pending for good, so the status never passes and the pull request is
+    // never opened. "timestamp-optional" lets the status pass where there is
+    // no timestamp to wait on. Keyed on the datasource, the cause, rather than
+    // on the depType, so the actions manager's `runs-on` and a custom manager's
+    // matrix entry are held the same way. Weighed against nulling
+    // `minimumReleaseAge` for the datasource, which would also drop the wait
+    // from a release that does carry a timestamp. Revisit if the datasource
+    // starts publishing timestamps and a week's wait on an image is not wanted.
+    //
+    // A move to a new image waits for a tick in the dashboard: the datasource
+    // lists an image the day GitHub ships it, which can be before the linter
+    // knows its label. ubuntu-26.04 was listed while actionlint 1.7.12 rejected
+    // it (its newest commit is from April and four pull requests for the label
+    // are open), so a pull request per repository would have arrived failing
+    // its own workflow lint, and merging one would have turned the default
+    // branch red. Weighed against a label exception shipped in an actionlint
+    // config, a list kept by hand until the linter catches up, and against
+    // closing each red pull request, which makes Renovate ignore that image for
+    // good. Lift the approval when actionlint ships the label, or when moving
+    // without a tick is wanted again.
+    {
+      matchDatasources: ["github-runners"],
+      minimumReleaseAgeBehaviour: "timestamp-optional",
+      dependencyDashboardApproval: true,
+    },
+    // The lock npm regenerates, which the release-age guard above would hold
+    // for good: a lock carries no release timestamp, and
+    // `minimumReleaseAgeBehaviour` defaults to "timestamp-required", under
+    // which Renovate marks every update lacking one pending, so
+    // `renovate/stability-days` never passes and the automerge just above
+    // never fires. "timestamp-optional" lets that status pass while the guard
+    // still holds: Renovate hands `minimumReleaseAge` to npm as `--before`
+    // when it regenerates a package-lock.json, so nothing resolved in it is
+    // younger than a week. Matched by that file rather than by the npm
+    // manager, which also owns pnpm's and yarn's locks and regenerates them
+    // with no such flag; those, bun's and every other manager's lock keep
+    // waiting for a human. Weighed against nulling `minimumReleaseAge` for
+    // the lock, as Renovate's own `security:minimumReleaseAge*` presets do,
+    // which drops the `--before` with it and leaves transitive versions with
+    // no age guard at all. One gap stays: where `--before` leaves npm unable
+    // to resolve a version, Renovate retries without it and says so in the
+    // pull request. Revisit when a repository commits the lock of another
+    // manager Renovate hands the age to (Poetry's, as
+    // `POETRY_SOLVER_MIN_RELEASE_AGE`), or if it stops handing it to npm.
+    {
+      matchFileNames: ["**/package-lock.json"],
+      matchUpdateTypes: ["lockFileMaintenance"],
+      minimumReleaseAgeBehaviour: "timestamp-optional",
+    },
+    // The custom managers below, on the actions' terms and for their reason: a
+    // tool they find is installed by a CI step and exists nowhere but in CI,
+    // so the run that installs it is also the run that tests it.
+    {
+      matchManagers: ["custom.regex"],
+      automerge: true,
+    },
+    {
+      matchManagers: ["custom.regex"],
+      matchDepTypes: ["github-runner"],
+      automerge: false,
+    },
+    // The matrix's runner images wait for the same tick as the `runs-on`
+    // images do, and for the same reason.
+    {
+      matchManagers: ["custom.regex"],
+      matchDepTypes: ["github-runner"],
+      dependencyDashboardApproval: true,
+    },
+    // Homebrew's actions, left to the custom manager below that reads their
+    // release in full. The actions manager reads the release beside a digest
+    // with at most three components, so it takes `2026.10.26.1` for
+    // `2026.10.26`, then looks for a newer tag of that shape and finds none:
+    // its dashboard says it "could not determine new digest" and the action
+    // never moves. The custom manager writes the update into the actions
+    // group, so the two stay one pull request.
+    {
+      matchManagers: ["github-actions"],
+      matchPackageNames: ["Homebrew/actions"],
+      enabled: false,
+    },
+    {
+      matchManagers: ["custom.regex"],
+      matchPackageNames: ["Homebrew/actions"],
+      groupName: "actions",
+    },
+  ],
+  // A tool a workflow installs in a `run:` step is in no manifest, so no
+  // manager finds it and it sits at the version it was written with while
+  // everything around it moves. These teach Renovate where they are. The
+  // knowledge stays here rather than as a marker beside each pin: a comment
+  // naming a tool is dead in a repository that runs another one, and this
+  // config is the one file that is only present when Renovate is.
+  customManagers: [
+    {
+      // `npm install -g <tool>@<version>`, the shape every workflow here uses
+      // to provision a Node CLI the runner does not ship.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: [
+        "npm install -g (?<depName>[@a-zA-Z0-9/._-]+)@(?<currentValue>[0-9][^\\s]*)",
+      ],
+      datasourceTemplate: "npm",
+    },
+    {
+      // bats as the shell workflow checks it out, a commit of its own
+      // repository with its release named beside it: the tag moves the commit,
+      // and the two are written back together.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: [
+        "repository: bats-core/bats-core\\n\\s+ref: (?<currentDigest>[0-9a-f]{40}) # (?<currentValue>\\S+)",
+      ],
+      depNameTemplate: "bats-core/bats-core",
+      datasourceTemplate: "github-tags",
+    },
+    {
+      // shellcheck as the shell workflow downloads it, the release's tag and
+      // the checksum of its Linux archive, one variable each on consecutive
+      // lines: the datasource computes the new release's checksum, so a bump
+      // never arrives without it.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: [
+        "SHELLCHECK_VERSION: (?<currentValue>\\S+)\\n\\s+SHELLCHECK_SHA256: (?<currentDigest>[0-9a-f]{64})",
+      ],
+      depNameTemplate: "koalaman/shellcheck",
+      datasourceTemplate: "github-release-attachments",
+    },
+    {
+      // shfmt as the shell workflow hands it to its action, the bare version
+      // that action takes: its default, the latest release, would otherwise
+      // move under the gate with no pull request.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: ["SHFMT_VERSION: (?<currentValue>\\S+)"],
+      depNameTemplate: "mvdan/sh",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      // luacheck as the Hammerspoon workflow installs it from LuaRocks, which
+      // Renovate has no datasource for: every release is tagged in the
+      // project's repository at the same version, so the tags are read.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: ["LUACHECK_VERSION: (?<currentValue>\\S+)"],
+      depNameTemplate: "lunarmodules/luacheck",
+      datasourceTemplate: "github-tags",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      // Homebrew's actions as the tap workflow pins them, a commit of their
+      // repository with its dated release beside it, four components
+      // (`2026.10.26.1`) that the actions manager cuts to three, so the rule
+      // above turns that manager off for them. The tag moves the commit, and
+      // the two are written back together.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: [
+        "uses: Homebrew/actions/[\\w-]+@(?<currentDigest>[0-9a-f]{40}) # (?<currentValue>\\d+\\.\\d+\\.\\d+\\.\\d+)",
+      ],
+      depNameTemplate: "Homebrew/actions",
+      datasourceTemplate: "github-tags",
+      versioningTemplate: "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$",
+    },
+    {
+      // The runner images a test matrix lists, as a block list's items, a
+      // flow list's, or the strings an expression hands `fromJSON`: the
+      // actions manager reads a job's `runs-on` alone, so a matrix would
+      // otherwise stay on its image while the jobs beside it moved. The
+      // patterns leave a `runs-on` written as a plain value to that manager.
+      customType: "regex",
+      managerFilePatterns: ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      matchStrings: [
+        "-[ \\t]+(?<depName>ubuntu|macos)-(?<currentValue>[0-9]+(?:\\.[0-9]+)?)[ \\t]*\\n",
+        "[\\[,][ \\t]*(?<depName>ubuntu|macos)-(?<currentValue>[0-9]+(?:\\.[0-9]+)?)",
+        "\"(?<depName>ubuntu|macos)-(?<currentValue>[0-9]+(?:\\.[0-9]+)?)\"",
+      ],
+      datasourceTemplate: "github-runners",
+      depTypeTemplate: "github-runner",
+    },
+  ],
+}

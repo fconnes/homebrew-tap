@@ -1,0 +1,38 @@
+// Prettier's options, in one place: the `lint` and `format` commands (a
+// Makefile's targets, or a JavaScript project's scripts) read this file and
+// repeat none of them. The Markdown is Prettier's everywhere; code is its only
+// where a project's own scripts hand it some (a branch whose formatter it is),
+// and otherwise keeps the formatter it has. This file is a copy `gesir update`
+// brings back, so a project's own exclusions go in its list of globs, as
+// negations, and a passage it must leave as written in a
+// `<!-- prettier-ignore -->` comment above it.
+{
+  // Every option below is the Markdown's layout, so it applies to Markdown
+  // files alone, nested ones included (a pattern with no slash matches the
+  // name at any depth). Prettier applies `proseWrap` to YAML as well, so set
+  // globally it would refill a long YAML scalar, a hook configuration's say,
+  // and fail a project's YAML lint. Any other file type keeps Prettier's
+  // defaults.
+  overrides: [
+    {
+      files: "*.md",
+      options: {
+        // Refill each paragraph to the print width, which is what a reader of
+        // the raw text sees in a terminal or an agent's context. The default,
+        // preserve, leaves a paragraph an edit left split exactly as it is.
+        proseWrap: "always",
+
+        // The width an editor and a diff show comfortably. The Markdown rule
+        // on line length is off in the markdownlint config, so this is the
+        // only statement of it.
+        printWidth: 80,
+
+        // Leave the YAML front matter byte for byte. The default formats it
+        // as YAML, refilling a `description` block and requoting a value,
+        // which changes what a tool reading a SKILL.md or a rule module sees.
+        // The same setting keeps code blocks as written.
+        embeddedLanguageFormatting: "off",
+      },
+    },
+  ],
+}

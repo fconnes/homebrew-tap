@@ -1,0 +1,81 @@
+name: CI
+# `push`, and `pull_request` only where a job needs that event: a pull request
+# opened from a branch in this repository lands in a different concurrency
+# group from the push that made it, so naming both events bills one commit
+# twice.
+on:
+  push:
+
+# One run per branch at a time: pushing again cancels the run still in flight,
+# so a burst of commits costs one run instead of one per commit. Only the newest
+# commit gets a verified result, which is the right trade for a check workflow
+# and the wrong one for a release, which must never be canceled mid-publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow only ever reads the repository: nothing here publishes a
+# release, comments on a pull request, or writes a check. Stated rather than
+# inherited, so a repository whose default token is read-write does not
+# silently hand these jobs more than they need.
+permissions:
+  contents: read
+
+# CI invokes the Makefile targets, not a re-implementation of the tools, so a
+# check added inside a target a step below runs is enforced here with no edit to
+# this file, while a target added to `make check` beside them needs a step of
+# its own. The runner provisions what those targets call: markdownlint-cli2 and
+# Prettier from npm, then Homebrew, which setup-homebrew installs and which taps
+# the commit being checked under the repository's name, so `make audit` reads
+# it. There is no checkout step: setup-homebrew empties the workspace and
+# fetches the commit into it itself. There is no test job: building a formula fetches its
+# tool's source, which a private repository refuses to this run's token, and a
+# formula's own test runs where it is installed. The workflow linter runs in a
+# workflow of its own, gated on the files it reads.
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # A major rather than `lts/*`: Node is the interpreter the pinned
+          # linter below runs on, so it is a tool version the checks run on,
+          # and `lts/*` moves the gate the day a new LTS is cut, with no
+          # commit to blame. Renovate reads it here and proposes each bump
+          # as a pull request left for review, since moving what the checks
+          # run on changes what the gate proves; Dependabot reads it nowhere,
+          # and under it the line moves by hand.
+          node-version: "26"
+      # Pinned on purpose: a floating version turns a green build into a moving
+      # target, and a new rule landing upstream would fail a commit that changed
+      # nothing.
+      - run: npm install -g markdownlint-cli2@0.23.3
+      - run: npm install -g prettier@3.9.9
+      # Homebrew on the Linux runner, with this repository fetched and linked as
+      # the tap its name declares, which is what `make audit` checks for.
+      # Homebrew's own tap template runs this action, at a ref the updater
+      # moves. Its fetch reaches a private repository only with the job's
+      # token, which it leaves in git's global configuration until the job
+      # ends: read-only, scoped to this repository, and placed after the npm
+      # installs so that no package installed from a registry runs beside it.
+      - uses: Homebrew/actions/setup-homebrew@d482da0e602890d3160aade42e72c8556103bf04 # 2026.10.26.1
+        with:
+          token: ${{ github.token }}
+      - run: make lint
+      - run: make audit
+      # The commit hooks over the whole tree. A hook is installed per clone and
+      # only ever offered, so a commit made with --no-verify, or from a clone
+      # that declined the install, reaches the branch with none of them applied.
+      # The lint hook is skipped, since this job runs its target already, and
+      # pre-commit is the version its requirements file pins, installed into an
+      # environment of its own, the runner's Python refusing a system-wide
+      # install. Run whatever the steps above found, so one run reports every
+      # failure.
+      - if: ${{ !cancelled() }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pre-commit"
+          "$RUNNER_TEMP/pre-commit/bin/pip" install -r .pre-commit/requirements.txt
+          "$RUNNER_TEMP/pre-commit/bin/pre-commit" run --all-files --show-diff-on-failure
+        env:
+          SKIP: make-lint

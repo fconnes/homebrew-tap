@@ -1,0 +1,6 @@
+# Who owns this repository's files, read by Renovate to assign the updates it
+# will not merge itself, and by the forge to request reviews where the
+# repository's plan offers code owners. The maintainer's own login: a person,
+# even where the repository lives under an organization, since an organization
+# can be neither reviewer nor assignee.
+* @frederic-connes

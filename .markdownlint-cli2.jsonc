@@ -1,0 +1,46 @@
+// A venv, a cache or any other untracked directory can hold third-party
+// Markdown, and "**/*.md" reaches it: honoring .gitignore keeps the gate
+// judging this project rather than its dependencies.
+{
+  "gitignore": true,
+  // .gitignore can never name .git/ itself, and "**/*.md" walks it: notes a
+  // tool keeps there would otherwise come under the gate.
+  "ignores": ["**/.git/**"],
+  // Every rule on, as markdownlint's default has it, but those listed below,
+  // each off against that default for the reason written above it, which says
+  // what it was weighed against and when to look at it again.
+  "config": {
+    "default": true,
+    "MD009": { "br_spaces": 2 },
+    "MD010": { "code_blocks": false },
+    // Line length: Prettier lays the Markdown out, refilling every paragraph
+    // at 80 columns (.prettierrc.json5), and what it leaves longer it cannot
+    // break, a URL, a table row, a line of code, which this rule would fail
+    // with no fix to offer. Weighed against keeping it with code blocks and
+    // tables exempted, two tools then holding one width. Revisit if a project
+    // stops running Prettier over its Markdown.
+    "MD013": false,
+    "MD024": { "siblings_only": true },
+    // One top-level heading per file: an Obsidian plugin's acceptance notes
+    // carry several as the content under test, and a note is a fixture, its
+    // bytes what the acceptance reads, so no directive goes into one. Weighed
+    // against the rule's catch, a second title pasted into a document, which
+    // a reader sees at once. Revisit if those notes leave the linted tree.
+    "MD025": false,
+    // Inline HTML: Markdown here writes HTML as content, an Obsidian plugin's
+    // acceptance notes exercising the elements a note may hold, and prose
+    // writes a placeholder in angle brackets (`<name>`), which the rule reads
+    // as an element. Weighed against `allowed_elements`, which can list
+    // neither a placeholder nobody predicts nor every element a note may
+    // test. Revisit if those notes leave the linted tree and the placeholders
+    // move into code spans.
+    "MD033": false,
+    // A top-level heading on the first line: much Markdown here is a fragment
+    // of a larger document, a rule module or a launcher's body opening on a
+    // second-level heading, a memory file on its text, a pull request
+    // template on its prompt. Weighed against a directive in each, written
+    // into every new fragment by hand. Revisit if fragments stop being
+    // Markdown files of their own.
+    "MD041": false
+  }
+}

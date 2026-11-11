@@ -1,0 +1,44 @@
+#
+# EditorConfig: https://editorconfig.org
+#
+
+# Top-most config: editors stop searching parent directories here.
+root = true
+
+# --- Defaults ---
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# --- 4-space indent by language standard ---
+# C# (.NET/Visual Studio)
+# Kotlin (coding conventions)
+# Lua (StyLua)
+# PHP (PSR-12)
+# Python (PEP 8)
+# Rust (rustfmt)
+[*.{cs,kt,kts,lua,php,py,pyi,rs}]
+indent_size = 4
+
+# --- Tab indent by language standard ---
+# Make, not a preference: a recipe indented any other way is rejected.
+# AppleScript (Script Editor)
+# Go (gofmt)
+[{Makefile,makefile,GNUmakefile,*.mk,*.applescript,*.go}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+# --- Markdown ---
+# 2 trailing spaces = hard line break, which trimming would silently eat.
+[*.md]
+trim_trailing_whitespace = false
+
+# --- Windows ---
+# Batch and PowerShell scripts: CRLF line endings.
+[*.{cmd,bat,ps1,psm1,psd1}]
+end_of_line = crlf

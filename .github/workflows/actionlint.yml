@@ -1,0 +1,45 @@
+name: actionlint
+# Its whole input is the workflows directory, so it runs when a workflow
+# changes and on demand, never on a push that left every workflow as it was: a
+# run there could only return the answer the last one gave, for a whole billed
+# minute. It lints the workflow files, catching a mistyped key or a bad
+# expression that would otherwise do nothing in silence.
+on:
+  push:
+    # Branches alone: GitHub evaluates no path filter on a tag push, so
+    # without this every release tag would run it over unchanged files.
+    branches: ["**"]
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+# One run per branch at a time: pushing again cancels the run still in flight,
+# so a burst of commits costs one run instead of one per commit. Only the newest
+# commit gets a verified result, which is the right trade for a check workflow
+# and the wrong one for a release, which must never be canceled mid-publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow only ever reads the repository: nothing here publishes a
+# release, comments on a pull request, or writes a check. Stated rather than
+# inherited, so a repository whose default token is read-write does not
+# silently hand these jobs more than they need.
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Fails on findings. The release it runs is named rather than left to
+      # the action, which takes the latest one otherwise: Renovate's actions
+      # manager reads the input and proposes each release, and under
+      # Dependabot it moves by hand.
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          version: 1.7.12

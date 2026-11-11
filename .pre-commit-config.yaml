@@ -1,0 +1,76 @@
+# Pre-commit hooks.
+# Update versions with: pre-commit autoupdate
+# Install with: pre-commit install
+# Run on everything with: pre-commit run --all-files
+#
+# 4.4.0 is the release naming a local hook's language `unsupported`, the
+# spelling of what `system` meant, which pre-commit is retiring; a local hook
+# written that way is refused by any pre-commit older.
+minimum_pre_commit_version: 4.4.0
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+      - id: fix-byte-order-marker
+      - id: end-of-file-fixer
+        # A patch or a diff is read by a machine: its context lines hold a lone
+        # space and its added lines may end in one, so rewriting either changes
+        # what it applies.
+        exclude: \.(patch|diff)$
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: \.(patch|diff)$
+      - id: mixed-line-ending
+        args: [--fix=auto]
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-vcs-permalinks
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: destroyed-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-json
+        # tsconfig.json is JSONC by TypeScript's own definition, comments
+        # included, and this hook reads strict JSON; inert where no such file
+        # exists.
+        exclude: ^tsconfig\.json$
+      - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+        # pnpm writes its lockfile as a stream of YAML documents, which this
+        # hook reads as one file holding several and refuses; the lock is the
+        # manager's own to validate. Inert where no such file exists.
+        exclude: ^pnpm-lock\.yaml$
+  # The acceptance criteria check, `check-acceptance`, is installed on some
+  # machines and not on others. Where it is on PATH it runs from the
+  # repository's root, and fails the commit where the suite and the criteria
+  # disagree; a project with no criteria passes it and prints nothing. Where it
+  # is not on PATH, which is every other clone and CI, the commit goes through
+  # with one line saying the criteria are unchecked, never that they passed.
+  # `verbose` is what shows that line on a commit that passes, pre-commit hiding
+  # a passing hook's output otherwise, and it is this hook's alone: its output
+  # is what tells a criterion checked from one nobody could check.
+  - repo: local
+    hooks:
+      - id: check-acceptance
+        name: check-acceptance
+        entry: sh -c 'command -v check-acceptance >/dev/null 2>&1 || { printf "check-acceptance is not on PATH, so the acceptance criteria are unchecked, not passed\n"; exit 0; }; exec check-acceptance'
+        language: unsupported
+        pass_filenames: false
+        always_run: true
+        verbose: true
+  # Delegate linting to the Makefile so there is only one source of truth: this
+  # hook runs exactly what `make lint` does on every commit. `make check` is the
+  # gate to run before pushing; what it adds beyond lint differs per project.
+  - repo: local
+    hooks:
+      - id: make-lint
+        name: make lint
+        entry: make lint
+        language: unsupported
+        pass_filenames: false
+        always_run: true
