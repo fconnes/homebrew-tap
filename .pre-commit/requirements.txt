@@ -1,0 +1,6 @@
+# The pre-commit this repository's hooks run under, pinned so it moves only
+# through a reviewed update: CI installs it from here to run the hooks where the
+# repository has CI, and a contributor can too (pip install -r). Both updaters
+# read this file, Renovate's pip_requirements manager and Dependabot's pip
+# ecosystem.
+pre-commit==4.7.0
