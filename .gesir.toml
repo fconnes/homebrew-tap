@@ -7,7 +7,7 @@
 [catalog]
 url = "https://github.com/fconnes/gesir-catalog.git"
 rev = "latest"
-commit = "0fb08416edf8248ca8f0ff484d9f8ec55fc4ddc0"
+commit = "18f1e220c54555fb1478fcd22eebcec7654519c2"
 dir = "catalog"
 
 [steps]
@@ -18,8 +18,9 @@ dir = "catalog"
 project = ["homebrew-tap"]
 updater = ["renovate"]
 settings = ["github-standard"]
+workflow = ["solo"]
 extras = ["attributes", "hooks", "style", "make"]
-glue = ["make-github", "homebrew-tap-github", "make-github-renovate", "make-hooks"]
+glue = ["solo-github", "make-github", "homebrew-tap-github", "make-github-renovate", "make-hooks", "solo-homebrew-tap-github"]
 
 [appointments]
 # The time this repository's scheduled jobs keep, in UTC: the minute, the

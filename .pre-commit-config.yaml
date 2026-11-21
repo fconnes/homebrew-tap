@@ -7,6 +7,15 @@
 # spelling of what `system` meant, which pre-commit is retiring; a local hook
 # written that way is refused by any pre-commit older.
 minimum_pre_commit_version: 4.4.0
+# `pre-commit install` installs a hook for each stage named here: the commit's,
+# and the push's, for a kind whose check belongs to the push (a hook naming
+# `stages: [pre-push]`). A hook naming no stage runs at the commit alone, so a
+# push does not run it a second time; one whose own manifest names the push as
+# well (the whitespace and file checks below) runs there too, over the files
+# the push carries. A clone whose hooks were installed before these lines gets
+# its push hook from `pre-commit install` run again.
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

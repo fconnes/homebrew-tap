@@ -214,6 +214,16 @@
       matchDepTypes: ["github-runner"],
       groupName: null,
     },
+    // A file vendored from a tag (the custom manager below) merges by no rule:
+    // its pull request moves the tag the file was copied from and nothing
+    // else, so the file and its digest are brought from the new tag by hand
+    // before it is merged, which the note it carries says.
+    {
+      matchDepTypes: ["vendored"],
+      prBodyNotes: [
+        "This moves the tag in the source URL alone. Before merging, download the file from the new tag over the vendored one, check its SHA-256 against the file the tag holds, write the new version and digest in the folder's README, and pass the gate.",
+      ],
+    },
     // Every automerge below departs from Renovate's default, which merges
     // nothing and leaves each pull request to a human. A rule here merges
     // only where the gate runs on the branch, a red run being the refusal,
@@ -567,6 +577,21 @@
       ],
       datasourceTemplate: "github-runners",
       depTypeTemplate: "github-runner",
+    },
+    {
+      // A file vendored from a GitHub repository's tag, its folder's README
+      // naming the raw URL it was copied from, as `Vendor/<name>/README.md`
+      // does: no manifest names such a file, so nothing else would tell when
+      // its source releases. A repository with no such README holds nothing
+      // this matches.
+      customType: "regex",
+      managerFilePatterns: ["/^Vendor/[^/]+/README\\.md$/"],
+      matchStrings: [
+        "<https://raw\\.githubusercontent\\.com/(?<depName>[\\w.-]+/[\\w.-]+)/v(?<currentValue>\\d[^/\\s]*)/",
+      ],
+      datasourceTemplate: "github-tags",
+      extractVersionTemplate: "^v(?<version>.+)$",
+      depTypeTemplate: "vendored",
     },
   ],
 }

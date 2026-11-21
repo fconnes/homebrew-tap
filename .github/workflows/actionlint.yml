@@ -5,20 +5,32 @@ name: actionlint
 # minute. It lints the workflow files, catching a mistyped key or a bad
 # expression that would otherwise do nothing in silence.
 on:
+  # A workflow change asking to merge, and one the default branch took; a
+  # branch pushed without a pull request runs nothing. Branches named on the
+  # push: GitHub evaluates no path filter on a tag push, so without them every
+  # release tag would run it over unchanged files.
+  # The default branch's push stays under the `solo` workflow too, where
+  # nothing else runs on it: it costs a Linux minute only when a workflow
+  # changed, and is the one check of a workflow change pushed without a pull
+  # request before the version's tag would fail on it.
+  pull_request:
+    paths:
+      - ".github/workflows/**"
   push:
-    # Branches alone: GitHub evaluates no path filter on a tag push, so
-    # without this every release tag would run it over unchanged files.
-    branches: ["**"]
+    branches: ["main"]
     paths:
       - ".github/workflows/**"
   workflow_dispatch:
 
-# One run per branch at a time: pushing again cancels the run still in flight,
-# so a burst of commits costs one run instead of one per commit. Only the newest
-# commit gets a verified result, which is the right trade for a check workflow
-# and the wrong one for a release, which must never be canceled mid-publish.
+# One run per pull request or branch at a time: pushing again cancels the run
+# still in flight, so a burst of commits costs one run instead of one per
+# commit. A pull request's runs share its number, which only that event
+# defines and which, unlike its head branch's name, two forks' pull requests
+# never share, hence the fallback to the ref. Only the newest commit gets a
+# verified result, which is the right trade for a check workflow and the wrong
+# one for a release, which must never be canceled mid-publish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # The workflow only ever reads the repository: nothing here publishes a

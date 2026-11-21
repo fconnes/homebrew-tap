@@ -1,17 +1,35 @@
 name: CI
-# `push`, and `pull_request` only where a job needs that event: a pull request
-# opened from a branch in this repository lands in a different concurrency
-# group from the push that made it, so naming both events bills one commit
-# twice.
+# When CI runs is the repository's workflow, the `workflow` step's answer in
+# its `.gesir.toml`, whose glue says what `push:` below becomes. `standard`
+# runs it on the integration: a pull request asking to merge, and the default
+# branch once it has, the commit a tag names having been judged there. `solo`
+# runs it on the tag of a candidate or a stable version, a development version
+# being judged by the local gate. In both, a pull request runs it, a branch
+# pushed without one runs nothing, its push only keeping the work off one
+# machine, and Renovate's branches stay on the push, Renovate merging its
+# branch with no pull request once the gate the push ran is green. `main` is
+# the default branch the catalog lays, and a repository laid before that step
+# keeps the `standard` trigger.
 on:
-  push:
+  pull_request:
+  # A branch pushed keeps the work off one machine and runs nothing. The tag of
+  # a candidate or a stable version is what CI judges, the release following
+  # its verdict; a development version is never tagged, its gate being the
+  # local one. Renovate's branches stay, as in every workflow.
+  # The default branch is the release, Homebrew reading its head at every
+  # `brew update`, so it keeps CI beside the tags and Renovate's branches.
+  push: { branches: ["main", "renovate/**"], tags: ["v*"] }
+  workflow_dispatch:
 
-# One run per branch at a time: pushing again cancels the run still in flight,
-# so a burst of commits costs one run instead of one per commit. Only the newest
-# commit gets a verified result, which is the right trade for a check workflow
-# and the wrong one for a release, which must never be canceled mid-publish.
+# One run per pull request or branch at a time: pushing again cancels the run
+# still in flight, so a burst of commits costs one run instead of one per
+# commit. A pull request's runs share its number, which only that event
+# defines and which, unlike its head branch's name, two forks' pull requests
+# never share, hence the fallback to the ref. Only the newest commit gets a
+# verified result, which is the right trade for a check workflow and the wrong
+# one for a release, which must never be canceled mid-publish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # The workflow only ever reads the repository: nothing here publishes a
@@ -28,10 +46,10 @@ permissions:
 # Prettier from npm, then Homebrew, which setup-homebrew installs and which taps
 # the commit being checked under the repository's name, so `make audit` reads
 # it. There is no checkout step: setup-homebrew empties the workspace and
-# fetches the commit into it itself. There is no test job: building a formula fetches its
-# tool's source, which a private repository refuses to this run's token, and a
-# formula's own test runs where it is installed. The workflow linter runs in a
-# workflow of its own, gated on the files it reads.
+# fetches the commit into it itself. There is no test job: building a formula
+# fetches its tool's source, which a private repository refuses to this run's
+# token, and a formula's own test runs where it is installed. The workflow
+# linter runs in a workflow of its own, gated on the files it reads.
 jobs:
   lint:
     runs-on: ubuntu-24.04
@@ -58,12 +76,14 @@ jobs:
       # moves. Its fetch reaches a private repository only with the job's
       # token, which it leaves in git's global configuration until the job
       # ends: read-only, scoped to this repository, and placed after the npm
-      # installs so that no package installed from a registry runs beside it.
+      # installs, so no npm package runs beside it. The hooks step, where the
+      # repository has hooks, runs after it with the token still set.
       - uses: Homebrew/actions/setup-homebrew@d482da0e602890d3160aade42e72c8556103bf04 # 2026.10.26.1
         with:
           token: ${{ github.token }}
       - run: make lint
-      - run: make audit
+      - if: ${{ !cancelled() }}
+        run: make audit
       # The commit hooks over the whole tree. A hook is installed per clone and
       # only ever offered, so a commit made with --no-verify, or from a clone
       # that declined the install, reaches the branch with none of them applied.
