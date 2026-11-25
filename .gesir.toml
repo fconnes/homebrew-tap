@@ -7,7 +7,7 @@
 [catalog]
 url = "https://github.com/fconnes/gesir-catalog.git"
 rev = "latest"
-commit = "18f1e220c54555fb1478fcd22eebcec7654519c2"
+commit = "b315820fe062742a4db686245e7b2d4cb42ce035"
 dir = "catalog"
 
 [steps]
@@ -19,7 +19,7 @@ project = ["homebrew-tap"]
 updater = ["renovate"]
 settings = ["github-standard"]
 workflow = ["solo"]
-extras = ["attributes", "hooks", "style", "make"]
+extras = ["attributes", "hooks", "os-ignores", "style", "make"]
 glue = ["solo-github", "make-github", "homebrew-tap-github", "make-github-renovate", "make-hooks", "solo-homebrew-tap-github"]
 
 [appointments]
@@ -33,3 +33,9 @@ hour = 1
 weekday = 6
 monthday = 19
 hours = [1, 4]
+
+[gitignore]
+# The gitignore.io snippets the .gitignore block holds, which `gesir
+# update` downloads again and rewrites. Edit the list here to change them;
+# an empty list takes none.
+snippets = ["macos", "linux"]

@@ -4,8 +4,13 @@
 {
   "gitignore": true,
   // .gitignore can never name .git/ itself, and "**/*.md" walks it: notes a
-  // tool keeps there would otherwise come under the gate.
-  "ignores": ["**/.git/**"],
+  // tool keeps there would otherwise come under the gate. A maintainers
+  // folder's archive holds snapshots never revised (a third-party skill as it
+  // was triaged, an evaluation's recorded output), which a lint fix would
+  // falsify. Weighed against an exclusion each repository writes by hand,
+  // which every one holding an archive had to find on a red gate. Revisit if
+  // the maintainers folder's archive comes to be revised.
+  "ignores": ["**/.git/**", "maintainers/archive/**"],
   // Every rule on, as markdownlint's default has it, but those listed below,
   // each off against that default for the reason written above it, which says
   // what it was weighed against and when to look at it again.
